@@ -179,7 +179,7 @@ void loop() {
 
       lastDebounceCam2 = currentTime;
     }
-    lastButtonStateCam2 = buttonStateCam1;
+    lastButtonStateCam2 = buttonStateCam2;
 
     // Volume Up 
     bool buttonStateUp = digitalRead(Volume_Up);
