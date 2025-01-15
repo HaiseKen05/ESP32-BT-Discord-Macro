@@ -1,202 +1,82 @@
 #include <BleKeyboard.h>
 
-BleKeyboard bleKeyboard ("ESP32 Keyboard", "ESP32", 100);
+BleKeyboard bleKeyboard("ESP32 Keyboard", "ESP32", 100);
 
-// Discord Buttons
-#define Mute 14  
-#define Deafen 12 
-#define PTT 13
+#define NUM_BUTTONS 10
 
-// OBS Stream / Record / Virtual Camera
-#define Stream 5
-#define Record 18 
-#define Virtual_Camera 4 
+// Button Pins
+int buttonPins[NUM_BUTTONS] = {
+  14, 12, 13, 5, 18, 4, 16, 17, 27, 26
+};
 
-// OBS Camera Switch
-#define Camera_1 16
-#define Camera_2 17
+// Corresponding Actions
+const char* actions[NUM_BUTTONS] = {
+  "Ctrl+Shift+1",  // Mute
+  "Ctrl+Shift+2",  // Deafen
+  "Ctrl+Shift+3",  // PTT (Hold/Release)
+  "Ctrl+Shift+4",  // Stream
+  "Ctrl+Shift+5",  // Record
+  "Ctrl+Shift+6",  // Virtual Camera
+  "Ctrl+Shift+7",  // Camera 1
+  "Ctrl+Shift+8",  // Camera 2
+  "VolumeUp",      // Volume Up
+  "VolumeDown"     // Volume Down
+};
 
-// PC Volume Up and Down
-#define Volume_Up 27
-#define Volume_Down 26
+unsigned long debounceTimers[NUM_BUTTONS] = {0};
+bool lastStates[NUM_BUTTONS] = {HIGH};
 
 const int debounceDelay = 50;
-// Discord
-unsigned long lastDebounceMute = 0;
-unsigned long lastDebounceDeafen = 0;
-unsigned long lastDebouncePTT = 0;
-// OBS Stream / Record / Virtual Camera
-unsigned long lastDebounceStream = 0;
-unsigned long lastDebounceRecord = 0;
-unsigned long lastDebounceVirtual = 0;
-// OBS Camera Switch
-unsigned long lastDebounceCam1 = 0;
-unsigned long lastDebounceCam2 = 0;
-// PC Volume Up and Down
-unsigned long lastDebounceUp = 0;
-unsigned long lastDebounceDown = 0;
-
-// Discord
-bool lastButtonStateMute = HIGH;
-bool lastButtonStateDeafen = HIGH;
-bool lastButtonStatePTT = HIGH;
-// OBS Stream/ Record/ Virtual Camera
-bool lastButtonStateStream = HIGH;
-bool lastButtonStateRecord = HIGH;
-bool lastButtonStateVirtual = HIGH;
-// OBS Camera Switch
-bool lastButtonStateCam1 = HIGH;
-bool lastButtonStateCam2 = HIGH;
-// PC Volume Up and Down
-bool lastButtonStateUp = HIGH;
-bool lastButtonStateDown = HIGH;
 
 void setup() {
   Serial.begin(115200);
   bleKeyboard.begin();
 
-  // Discord
-  pinMode(Mute, INPUT_PULLUP);
-  pinMode(Deafen, INPUT_PULLUP);
-  pinMode(PTT, INPUT_PULLUP);
-  // OBS Stream / Record / Virtual Camera
-  pinMode(Stream, INPUT_PULLUP);
-  pinMode(Record, INPUT_PULLUP);
-  pinMode(Virtual_Camera, INPUT_PULLUP);
-  // OBS Camera Switch
-  pinMode(Camera_1, INPUT_PULLUP);
-  pinMode(Camera_2, INPUT_PULLUP);
-  // Volume Up and Down
-  pinMode(Volume_Up, INPUT_PULLUP);
-  pinMode(Volume_Down, INPUT_PULLUP);
+  // Initialize button pins
+  for (int i = 0; i < NUM_BUTTONS; i++) {
+    pinMode(buttonPins[i], INPUT_PULLUP);
+  }
 
   Serial.println("Bluetooth Ready");
 }
 
 void loop() {
-  if (bleKeyboard.isConnected()){
-    Serial.println("Connected");
-
+  if (bleKeyboard.isConnected()) {
     unsigned long currentTime = millis();
 
-    // Discord Mute 
-    bool buttonStateMute = digitalRead(Mute);
-    if (buttonStateMute == LOW && lastButtonStateMute == HIGH && (currentTime - lastDebounceMute > debounceDelay)) {
-      bleKeyboard.press(KEY_RIGHT_CTRL);
-      bleKeyboard.press(KEY_RIGHT_SHIFT);
-      bleKeyboard.press('1');
-      delay(100);
-      bleKeyboard.releaseAll();
+    for (int i = 0; i < NUM_BUTTONS; i++) {
+      bool currentState = digitalRead(buttonPins[i]);
 
-      lastDebounceMute = currentTime;
+      if (currentState == LOW && lastStates[i] == HIGH && (currentTime - debounceTimers[i] > debounceDelay)) {
+        handleAction(i);
+        debounceTimers[i] = currentTime;
+      } else if (currentState == HIGH && lastStates[i] == LOW) {
+        if (strcmp(actions[i], "Ctrl+Shift+3") == 0) {
+          // Release PTT (Push-to-Talk) keys
+          bleKeyboard.releaseAll();
+        }
+        if (actions[i] == "VolumeUp" || actions[i] == "VolumeDown") {
+          bleKeyboard.releaseAll();
+        }
+      }
+
+      lastStates[i] = currentState;
     }
-    lastButtonStateMute = buttonStateMute;
+  }
+}
 
-    // Discord Deafen
-    bool buttonStateDeafen = digitalRead(Deafen);
-    if (buttonStateDeafen == LOW && lastButtonStateDeafen == HIGH && (currentTime - lastDebounceDeafen > debounceDelay)) {
-      bleKeyboard.press(KEY_RIGHT_CTRL);
-      bleKeyboard.press(KEY_RIGHT_SHIFT);
-      bleKeyboard.press('2');
-      delay(100);
-      bleKeyboard.releaseAll();
-
-      lastDebounceDeafen = currentTime;
-    }
-    lastButtonStateDeafen = buttonStateDeafen;
-    // Discord PTT  
-    bool buttonStatePTT = digitalRead(PTT);
-    if (buttonStatePTT == LOW && lastButtonStatePTT == HIGH && (currentTime - lastDebouncePTT > debounceDelay)) {
-      bleKeyboard.press(KEY_RIGHT_CTRL);
-      bleKeyboard.press(KEY_RIGHT_SHIFT);
-      bleKeyboard.press('3');
-      delay(100);
-    } else if (buttonStatePTT == HIGH && lastButtonStatePTT == LOW) {
-      bleKeyboard.releaseAll();
-    }
-    lastButtonStatePTT = buttonStatePTT;
-  
-    // OBS Stream
-    bool buttonStateStream = digitalRead(Stream);
-    if (buttonStateStream == LOW && lastButtonStateStream == HIGH && (currentTime - lastDebounceStream > debounceDelay)) {
-    bleKeyboard.press(KEY_RIGHT_CTRL);
-    bleKeyboard.press(KEY_RIGHT_SHIFT);
-    bleKeyboard.press('4');
-    delay(100);
-    bleKeyboard.releaseAll();
-
-      lastDebounceStream = currentTime;
-    }
-    lastButtonStateStream = buttonStateStream;
-
-    // OBS Record
-    bool buttonStateRecord = digitalRead(Record);
-    if (buttonStateRecord == LOW && lastButtonStateRecord == HIGH && (currentTime - lastDebounceRecord > debounceDelay)) {
-    bleKeyboard.press(KEY_RIGHT_CTRL);
-    bleKeyboard.press(KEY_RIGHT_SHIFT);
-    bleKeyboard.press('5');
-    delay(100);
-    bleKeyboard.releaseAll();
-
-      lastDebounceRecord = currentTime;
-    }
-    lastButtonStateRecord = buttonStateRecord;
-
-    // OBS Virtual Camera
-    bool buttonStateVirtual = digitalRead(Virtual_Camera);
-    if (buttonStateVirtual == LOW && lastButtonStateVirtual == HIGH && (currentTime - lastDebounceVirtual > debounceDelay)) {
-    bleKeyboard.press(KEY_RIGHT_CTRL);
-    bleKeyboard.press(KEY_RIGHT_SHIFT);
-    bleKeyboard.press('6');
-    delay(100);
-    bleKeyboard.releaseAll();
-
-      lastDebounceVirtual = currentTime;
-    }
-    lastButtonStateVirtual = buttonStateVirtual;
-
-    // OBS Camera Switch 1
-    bool buttonStateCam1 = digitalRead(Camera_1);
-    if (buttonStateCam1 == LOW && lastButtonStateCam1 == HIGH && (currentTime - lastDebounceCam1 > debounceDelay)) {
-    bleKeyboard.press(KEY_RIGHT_CTRL);
-    bleKeyboard.press(KEY_RIGHT_SHIFT);
-    bleKeyboard.press('7');
-    delay(100);
-    bleKeyboard.releaseAll();
-
-      lastDebounceCam1 = currentTime;
-    }
-    lastButtonStateCam1 = buttonStateCam1;
-
-    // OBS Camera Switch 2
-    bool buttonStateCam2 = digitalRead(Camera_2);
-    if (buttonStateCam2 == LOW && lastButtonStateCam2 == HIGH && (currentTime - lastDebounceCam2 > debounceDelay)) {
-    bleKeyboard.press(KEY_RIGHT_CTRL);
-    bleKeyboard.press(KEY_RIGHT_SHIFT);
-    bleKeyboard.press('8');
-    delay(100);
-    bleKeyboard.releaseAll();
-
-      lastDebounceCam2 = currentTime;
-    }
-    lastButtonStateCam2 = buttonStateCam2;
-
-    // Volume Up 
-    bool buttonStateUp = digitalRead(Volume_Up);
-    if (buttonStateUp == LOW && lastButtonStateUp == HIGH && (currentTime - lastDebounceUp > debounceDelay)) {
+void handleAction(int index) {
+  if (strcmp(actions[index], "VolumeUp") == 0) {
     bleKeyboard.press(KEY_MEDIA_VOLUME_UP);
-    } else if (buttonStateUp == HIGH && lastButtonStateUp == LOW) {
-      bleKeyboard.releaseAll();
-    }
-    lastButtonStateUp = buttonStateUp;
-    
-    // Volume Down 
-    bool buttonStateDown = digitalRead(Volume_Down);
-    if (buttonStateDown == LOW && lastButtonStateDown == HIGH && (currentTime - lastDebounceDown > debounceDelay)) {
+  } else if (strcmp(actions[index], "VolumeDown") == 0) {
     bleKeyboard.press(KEY_MEDIA_VOLUME_DOWN);
-    } else if (buttonStateDown == HIGH && lastButtonStateDown == LOW) {
-      bleKeyboard.releaseAll();
-    }
-    lastButtonStateDown = buttonStateDown;
+  } else {
+    // Parse custom actions (e.g., Ctrl+Shift+X)
+    if (strstr(actions[index], "Ctrl")) bleKeyboard.press(KEY_RIGHT_CTRL);
+    if (strstr(actions[index], "Shift")) bleKeyboard.press(KEY_RIGHT_SHIFT);
+    char key = actions[index][strlen(actions[index]) - 1];
+    bleKeyboard.press(key);
+    delay(100);
+    bleKeyboard.releaseAll();
   }
 }
